@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CXPlayer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background-color: #1a1a1a;
+            padding: 20px 30px;
+            border-bottom: 3px solid #ffffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            font-size: 28px;
+            letter-spacing: 3px;
+            color: #ffffff;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background-color: #ffffff;
+            color: #0a0a0a;
+        }
+        .library {
+            flex: 1;
+            padding: 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 30px;
+            overflow-y: auto;
+        }
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 80px 20px;
+            color: #666;
+            font-size: 18px;
+        }
+        .game-card {
+            background-color: #1a1a1a;
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .game-card:hover {
+            border-color: #ffffff;
+            transform: translateY(-5px);
+        }
+        .game-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        #game-frame {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: none;
+            z-index: 1000;
+        }
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 40px;
+            color: #fff;
+            cursor: pointer;
+            z-index: 1001;
+            background: rgba(0,0,0,0.7);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>CXPLAYER</h1>
+        <div class="controls">
+            <button onclick="importGame()">IMPORT GAME.PY</button>
+            <button onclick="clearLibrary()">CLEAR DOCK</button>
+        </div>
+    </header>
+
+    <div class="library" id="library">
+        <div class="empty-state">
+            <p>NO GAMES INSTALLED</p>
+            <p style="margin-top: 20px; font-size: 16px;">Use "IMPORT GAME.PY" to load games</p>
+        </div>
+    </div>
+
+    <!-- Game Player Frame -->
+    <div id="game-frame">
+        <div class="close-btn" onclick="closeGame()">✕</div>
+        <iframe id="game-content" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>
+    </div>
+
+    <input type="file" id="fileInput" accept=".py">
+
+    <script>
+        let installedGames = [];
+
+        function renderLibrary() {
+            const library = document.getElementById('library');
+            library.innerHTML = '';
+
+            if (installedGames.length === 0) {
+                library.innerHTML = `
+                    <div class="empty-state">
+                        <p>NO GAMES INSTALLED</p>
+                        <p style="margin-top: 20px; font-size: 16px;">Use "IMPORT GAME.PY" to load games</p>
+                    </div>
+                `;
+                return;
+            }
+
+            installedGames.forEach((game, index) => {
+                const card = document.createElement('div');
+                card.className = 'game-card';
+                card.innerHTML = `
+                    <div class="game-icon">🎮</div>
+                    <h3>${game.name}</h3>
+                    <button onclick="launchGame(${index})" style="margin-top: 15px; width: 100%;">LAUNCH</button>
+                `;
+                library.appendChild(card);
+            });
+        }
+
+        function importGame() {
+            const input = document.getElementById('fileInput');
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const content = event.target.result;
+                    // Try to extract index.html from game.py
+                    const match = content.match(/index\.html\s*=\s*"""([\s\S]*?)"""/);
+                    let htmlContent = '';
+
+                    if (match && match[1]) {
+                        htmlContent = match[1].trim();
+                    } else {
+                        // Fallback: try single quotes or just use whole content
+                        const altMatch = content.match(/index\.html\s*=\s*["']([\s\S]*?)["']/);
+                        if (altMatch) {
+                            htmlContent = altMatch[1];
+                        } else {
+                            alert("Could not parse index.html from game.py\nMake sure it follows the format:\nindex.html = \"\"\" ... \"\"\"");
+                            return;
+                        }
+                    }
+
+                    const gameName = file.name.replace('.py', '').replace(/_/g, ' ');
+                    
+                    installedGames.push({
+                        name: gameName || "Imported Game",
+                        html: htmlContent
+                    });
+
+                    renderLibrary();
+                    alert(`Game "${gameName}" installed successfully!`);
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function launchGame(index) {
+            const game = installedGames[index];
+            const frame = document.getElementById('game-frame');
+            const iframe = document.getElementById('game-content');
+            
+            iframe.srcdoc = game.html;
+            frame.style.display = 'block';
+        }
+
+        function closeGame() {
+            const frame = document.getElementById('game-frame');
+            const iframe = document.getElementById('game-content');
+            frame.style.display = 'none';
+            iframe.srcdoc = '';
+        }
+
+        function clearLibrary() {
+            if (confirm("Clear all games from dock?")) {
+                installedGames = [];
+                renderLibrary();
+            }
+        }
+
+        // Initialize
+        renderLibrary();
+    </script>
+</body>
+</html>
